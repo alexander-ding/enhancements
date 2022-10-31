@@ -179,26 +179,26 @@ the control plane and a node plugin which runs on every node.
 
 The node component of a CSI Driver require direct access to the host for making block devices and/or filesystems
 available to the kubelet, CSI Drivers use the [mkfs(8)](https://man7.org/linux/man-pages/man8/mkfs.8.html) and
-[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html) commands format and mount filesystems.
+[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html) commands to format and mount filesystems.
 CSI Drivers running in Windows nodes can't execute similar Windows commands due to the missing capability
-of running privileged operations from a container. To workaround this issue a proxy binary called [CSI Proxy was
+of running privileged operations from a container. To workaround this issue, a proxy binary called [CSI Proxy was
 introduced](https://kubernetes.io/blog/2020/04/03/kubernetes-1-18-feature-windows-csi-support-alpha/) as a way to
 perform privileged storage operations by relaying the execution of these privileged storage operations to it, CSI
 Drivers connect to a gRPC API exposed by CSI Proxy as named pipes in the host and invoke the CSI Proxy API services
 to execute privileged powershell commands to mount and format filesystems on behalf of the CSI Driver. [CSI Proxy
 became GA in Kubernetes 1.22](https://kubernetes.io/blog/2021/08/09/csi-windows-support-with-csi-proxy-reaches-ga/).
 
-At around the same time, SIG Windows introduced [HostProcess containers](https://kubernetes.io/blog/2021/08/16/windows-hostprocess-containers/),
-this feature enables running containers as a process in the host (hence the name),
+At around the same time, SIG Windows introduced [HostProcess containers](https://kubernetes.io/blog/2021/08/16/windows-hostprocess-containers/.
+This feature enables running containers as a process in the host (hence the name),
 with this feature CSI Drives can directly perform the same privileged storage operations
-that CSI Proxy did, this KEP explains the process to transition CSI Drivers to become HostProcess containers.
+that CSI Proxy did. This KEP explains the process to transition CSI Drivers to become HostProcess containers.
 
 ### Glossary
 
-A few terms for reference as this document is read:
+Reference for a few terms used throughout this document:
 
-* API Group - A grouping of APIs in CSI Proxy by their purpose, for example the Volume API Group has API Methods related with volume interaction, [there are 4 API groups (Disk, Fileyste, Volume, SMB) in v1 status and 2 in v1beta status](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/README.md#feature-status).
-* API Version - an API Group can have multiple versions e.g. v1alpha1, v1beta1, v1, etc. [As of GA there are 4 API groups (Disk, Fileyste, Volume, SMB) in v1 status and 2 API Groups (iSCSI, System) in v1beta status](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/README.md#feature-status).
+* API Group - A grouping of APIs in CSI Proxy by their purpose. For example, the Volume API Group has API Methods related with volume interaction. [There are 4 API groups (Disk, Fileyste, Volume, SMB) in v1 status and 2 in v1beta status](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/README.md#feature-status).
+* API Version - An API Group can have multiple versions e.g. v1alpha1, v1beta1, v1, etc. [As of GA there are 4 API groups (Disk, Fileyste, Volume, SMB) in v1 status and 2 API Groups (iSCSI, System) in v1alpha status](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/README.md#feature-status).
 * Conversion layer - Generated go code in CSI Proxy that transforms client versioned requests to server "version agnostic" requests.
 * CSI Proxy client - The library that CSI Drivers and addons use to connect to the CSI Proxy server.
 * CSI Proxy server - The CSI Proxy binary running in the host node.
@@ -214,19 +214,19 @@ demonstrate the interest in a KEP within the wider Kubernetes community.
 [experience reports]: https://github.com/golang/go/wiki/ExperienceReports
 -->
 
-CSI Proxy enabled running CSI in Windows nodes using a client/server model, the server is the CSI Proxy binary
-running as a Windows service in the node, the client is the CSI Driver which communicates with CSI Proxy on
-every CSI call done on the node plugin. While this model has worked fine it has a few drawbacks:
+CSI Proxy enabled running CSI in Windows nodes using a client/server model. The server is the CSI Proxy binary
+running as a Windows service in the node, and the client is the CSI Driver, which communicates with CSI Proxy on
+every CSI call done on the node plugin. While this model has worked fine, it has a few drawbacks:
 
 - Different deployment model than Linux - Linux privileged containers are used to perform the privileged storage
-  operations (format/mount), Windows containers aren't privileged so as a workaround the CSI Driver is run as non-privileged
-  and privileged operations are relayed to CSI Proxy. In terms of manifests the Windows component needs to have an
-  additional section to do a hostpath mount of the named pipes exposed by CSI Proxy.
+  operations (format/mount). However, Windows containers aren't privileged. To work around the problem, the CSI Driver is run as non-privileged containers,
+  and privileged operations are relayed to CSI Proxy. In deployment manifests, the Windows component needs to have an
+  additional section to mount the named pipes exposed by CSI Proxy as a hostpath.
 - Additional component in the host to maintain - The cluster administrator needs to install and run CSI Proxy
-  during the node bootstrap, the cluster administrator also needs to think about the upgrade scenario in addition to
+  during the node bootstrap. The cluster administrator also needs to think about the upgrade workflow in addition to
   upgrading the CSI Driver.
-- Difficult releases of bugfixes & features - After a bugfix we create a new version of the CSI Proxy which needs
-  to be redeployed in the cluster, after a feature is merged in addition to redeploying a new version of CSI Proxy
+- Difficult releases of bugfixes & features - After a bugfix, we create a new version of the CSI Proxy to be
+  redeployed in the cluster. After a feature is merged, in addition to redeploying a new version of CSI Proxy,
   the client needs to be updated with a new version of the CSI Proxy client and connect to the new version of the named pipes,
   this workflow is not as simple as the Linux counterpart which only needs to update Go dependencies.
 - Multiple API versions to maintain - As part of the original design of CSI Proxy it was decided to have different
@@ -234,12 +234,12 @@ every CSI call done on the node plugin. While this model has worked fine it has 
   to having multiple versions of the API (v1alphaX, v1betaX, v1). In addition, if we want to add a new feature we'd need
   to create a new API version e.g. v2alpha1 ([see this PR as an example of adding methods to the Volume API Group](https://github.com/kubernetes-csi/csi-proxy/pull/186)).
 
-In 1.22 SIG Windows introduced [HostProcess containers](https://kubernetes.io/blog/2021/08/16/windows-hostprocess-containers/)
-as an alternative way to run containers, HostProcess containers run directly in the host
-and have a behavior similar to that of a regular process.
+In 1.22, SIG Windows introduced [HostProcess containers](https://kubernetes.io/blog/2021/08/16/windows-hostprocess-containers/)
+as an alternative way to run containers. HostProcess containers run directly in the host
+and behave like to a regular process.
 
 Using HostProcess containers in CSI Drivers enables CSI Drivers to perform the privileged storage operations
-directly, most of the drawbacks in the client/server model are no longer present in the new model.
+directly. Most of the drawbacks in the client/server model are no longer present in the new model.
 
 ### Goals
 
@@ -249,10 +249,10 @@ know that this has succeeded?
 -->
 
 - Identify the pros/cons of the different ways to transition CSI Drivers to become HostProcess containers - This
-  includes changes in dependent components like CSI Proxy, it also includes defining the changes in the CSI Drivers.
-- Identify the security implications of running CSI Drivers as HostProcess containers - Like the Linux counterpart
-  the cluster needs to have security policies defining in which scenarios it should be enabled, we'll aim to make
-  a similar analysis for Windows.
+  includes changes in dependent components like CSI Proxy, as well as defining the changes in the CSI Drivers.
+- Identify the security implications of running CSI Drivers as HostProcess containers - Like their Linux counterpart,
+  HostProcess containers need to have security policies in place limiting the scenarios in which they are enabled.
+  We provide an analysis on the security implications in this KEP.
 
 ### Non-Goals
 
@@ -262,10 +262,10 @@ and make progress.
 -->
 - Improve the performance of CSI Drivers in Windows - There should be an improvement in the performance by
   removing the communication aspects between the CSI Driver and CSI Proxy (the protobuf serialization/deserialization,
-  the gRPC call through named pipes) however this improvement might not be noticeable, most of the latency
-  comes from doing the format/mount operations through powershell commands which is outside the scope of this change.
+  the gRPC call through named pipes). However, this improvement might not be noticeable, as most of the latency
+  comes from doing the format/mount operations through powershell commands, which is outside the scope of this change.
 - Define security implementation details - A goal is to understand the security implications of enabling HostProcess
-  containers, we aim to provide guidelines but not implementation details about the components that need to be installed
+  containers. We aim to provide guidelines but not implementation details about the components that need to be installed
   in the cluster.
 
 ## Proposal
@@ -278,11 +278,11 @@ implementation. What is the desired outcome and how do we measure success?.
 The "Design Details" section below is for the real
 nitty-gritty.
 -->
-As part of the transition of CSI Drivers to HostProcess containers we would like to:
+As part of the transition of CSI Drivers to HostProcess containers, we would like to:
 
 - Refactor the CSI Proxy codebase to become a Go library in favor of the current client/server model.
-- Define guidelines for the transition of CSI Drivers to HostProcess containers, both the changes in the Go code
-  and the way it's deployed and some considerations about security.
+- Define guidelines for the transition of CSI Drivers to HostProcess containers, including changes in the Go code,
+  deployment, and security considerations.
 
 ### Notes/Constraints/Caveats
 
@@ -292,9 +292,9 @@ What are some important details that didn't come across above?
 Go in to as much detail as necessary here.
 This might be a good place to talk about core concepts and how they relate.
 -->
-HostProcess containers run as processes in the host, one of the differences with a privileged Linux container
-is that there's no filesystem isolation, this means that enabling HostProcess containers should be done for
-system components only. This point will be expanded in the detailed design.
+HostProcess containers run as processes in the host. One of the differences with a privileged Linux container
+is that there's no filesystem isolation. This means that enabling HostProcess containers should be done for
+system components only. This point will be expanded on in the detailed design.
 
 ### Risks and Mitigations
 
@@ -324,27 +324,27 @@ proposal will be implemented, this is the place to discuss them.
 -->
 
 The following paragraphs summarize the architecture of CSI Proxy, how CSI Drivers use it, the purpose of the conversion
-layer of CSI Proxy that enables backward compatibility with previous API Versions and a description of the files
+layer of CSI Proxy that enables backward compatibility with previous API Versions, and a description of the files
 generated by the conversion layer used in CSI Proxy.
 
 CSI Proxy has a client/server design with two main components:
 
-* a binary that runs in the host (aka CSI Proxy server), this binary can execute privileged storage operations on the
-  host, once configured to run as a Windows service it creates named pipes on startup for all the versions of the API
+* a binary that runs in the host (the CSI Proxy server). This binary can execute privileged storage operations on the
+  host. Once configured to run as a Windows service, it creates named pipes on startup for all the versions of the API
   Groups defined on the codebase.
-* client go libraries that CSI Drivers and Addons import to connect to the CSI Proxy server, the methods and objects
-  available in the library are defined with [protobuf](https://github.com/kubernetes-csi/csi-proxy#feature-status), on
-  startup the CSI Driver initializes a client for each version of the API Groups required which will connect and issue
+* client go libraries that CSI Drivers and Addons import to connect to the CSI Proxy server. The methods and objects
+  available in the library are defined with [protobuf](https://github.com/kubernetes-csi/csi-proxy#feature-status). On
+  startup, the CSI Driver initializes a client for each version of the API Groups required, which will connect and issue
   requests through gRPC to their pre-configured named pipes on the host.
 
 CSI Driver implementers can write a Windows specific implementation of the node component of the CSI Driver. In the
-implementation a CSI Driver will make use of the imported CSI Proxy client libraries to issue privileged storage
-operations, assuming that a volume was created and attached to a node by the controller component of the CSI Driver
+implementation, a CSI Driver will make use of the imported CSI Proxy client libraries to issue privileged storage
+operations. Assuming that a volume was created and attached to a node by the controller component of the CSI Driver,
 the following CSI calls will be done by the kubelet to the CSI Driver.
 
 **Volume set up**
 
-* NodeStageVolume - Create a Windows volume, format it to NTFS, create a partition access path in the node (global mount).
+* NodeStageVolume - Create a Windows volume, format it to NTFS, and create a partition access path in the node (global mount).
 * NodePublishVolume - Create a symlink from the kubelet Pod-PVC path to the global path (pod mount).
 
 **Volume tear down**
@@ -352,25 +352,25 @@ the following CSI calls will be done by the kubelet to the CSI Driver.
 * NodeUnpublishVolume - Remove the symlink created above.
 * NodeUnstageVolume - Remove the partition access path.
 
-CSI Proxy is designed to be backwards compatible and a single binary running in the Windows node can serve requests from
-multiple CSI Proxy client versions, we're able to do this because the CSI Proxy binary on startup will create named
-pipes for all the versions available in every API Group (e.g. the Volume, Disk, Filesystem, SMB groups), in addition,
-there's a conversion layer in the CSI Proxy binary that transform client version specific requests to server "version
-agnostic" requests which are then processed by the CSI Proxy binary, the following diagram shows the conversion process
+CSI Proxy is designed to be backwards compatible, and a single binary running in the Windows node can serve requests from
+multiple CSI Proxy client versions. We're able to do this, because the CSI Proxy binary will create named
+pipes on startup for all the versions available in every API Group (e.g. the Volume, Disk, Filesystem, SMB groups). In addition,
+there's a conversion layer in the CSI Proxy binary that transforms client version specific requests to server "version
+agnostic" requests, which are then processed by the CSI Proxy binary. The following diagram shows the conversion process
 (from the [CSI Proxy development docs](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/docs/DEVELOPMENT.md)):
 
-![csi-proxy-client-server](./csi-proxy-client-server.jpg)
+![CSI Proxy client/server model](./csi-proxy-client-server.jpg)
 
-Understanding the conversion layer will help in the transition to HostProcess containers as most of the code that the
-clients use to communicate with the CSI Proxy server is generated. The conversion layer objective is to generate go code
-that maps the versioned client requests to server agnostic requests, it does so by analyzing the generated api.pb.go
+Understanding the conversion layer will help in the transition to HostProcess containers, as most of the code that the
+clients use to communicate with the CSI Proxy server is generated. The conversion layer's objective is to generate Go code
+that maps versioned client requests to server agnostic requests. It does so by analyzing the generated `api.pb.go`
 files (generated through `protoc` from the protobuf files) for each version of the API Groups and generating multiple
 files for different purposes (taking as example the Volume API Group):
 
 
 * [\<version\>/server_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/pkg/server/volume/impl/v1beta3/server_generated.go)
-  - The gRPC server implementation of the methods of a versioned API Group, each method receives a versioned request and
-    expects a versioned response, the code generated follows this pattern:
+  - The gRPC server implementation of the methods of a versioned API Group. Each method receives a versioned request and
+    expects a versioned response. The code generated follows this pattern:
 
 ```
 func v1Foo(v1Request v1FooRequest) v1FooResponse {
@@ -390,30 +390,30 @@ func v1Foo(v1Request v1FooRequest) v1FooResponse {
 
 
 * [types_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/pkg/server/volume/impl/types_generated.go)
-  the idea is to collect all the methods available across all the versions of an API Group so that the server has a
-  corresponding implementation for it, the generator reads all the methods found across the
-  volume/&lt;version>/api.pb.go files and generates an interface with all the methods found that the server must
+  The idea is to collect all the methods available across all the versions of an API Group so that the server has a
+  corresponding implementation for it. The generator reads all the methods found across the
+  `volume/<version>/api.pb.go` files and generates an interface with all the methods found that the server must
   implement, in the example above the server interface will have the `Foo` method
 * [\<version\>/conversion_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/pkg/server/volume/impl/v1/conversion_generated.go)
   The generated implementation of the conversion functions shown above (e.g. `convertV1FooRequestToFooRequest`,
-  `convertFooResponseToV1FooResponse`) in some cases it's possible that the conversion code generator generates a nested
-  data structure that's not built correctly, there's an additional file with overrides for the functions that were
+  `convertFooResponseToV1FooResponse`). In some cases, it's possible that the conversion code generator generates a nested
+  data structure that's not built correctly. There's an additional file with overrides for the functions that were
   generated incorrectly.
-* client [\<API Group\>/\<version\>/client_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/client/groups/volume/v1/client_generated.go)
-  Generated in the client libraries to be used by users of the CSI Proxy client, it creates proxy methods corresponding
-  to the api.pb.go methods of the versioned API Group, this file defines the logic to create a connection to the
-  corresponding named pipe creating a gRPC client out of it and storing it for later usage, as a result, the proxy
+* Client [\<API Group\>/\<version\>/client_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/client/groups/volume/v1/client_generated.go)
+  Generated in the client libraries to be used by users of the CSI Proxy client. It creates proxy methods corresponding
+  to the `api.pb.go` methods of the versioned API Group. This file defines the logic to create a connection to the
+  corresponding named pipe, creating a gRPC client out of it and storing it for later usage. As a result, the proxy
   methods don't need a reference to the gRPC client.
 
 
 ### Prerequisite: Make CSI Proxy an embedded library without a server component
 
-If we configure the Windows node component of a CSI Driver/Addon to be a Windows HostProcess pod then it'll be able to
-use the same powershell commands that we use in the server code of CSI Proxy, the idea is to use the server code of CSI
+If we configure the Windows node component of a CSI Driver/Addon to be a Windows HostProcess pod, then it'll be able to
+use the same powershell commands that we use in the server code of CSI Proxy. The idea is to use the server code of CSI
 Proxy as a library in CSI Drivers/Addons. With this, we also remove the server component.
 
 As described in the [Windows HostProcess Pod](https://kubernetes.io/docs/tasks/configure-pod-container/create-hostprocess-pod/)
-guide we'd need to configure the PodSpec of node component of the CSI Driver/Addon that runs in Windows nodes with:
+guide, we'd need to configure the PodSpec of node component of the CSI Driver/Addon that runs in Windows nodes with:
 
 
 ```yaml
@@ -428,7 +428,7 @@ spec:
 ### Implementation idea 1: Update the conversion layer to use the server code gRPC
 
 Modify the implementation of [\<API Group\>/\<version\>/client_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/client/groups/volume/v1/client_generated.go)
-so that it calls the server implementation directly (which should be part of the imported go module), the current
+so that it calls the server implementation directly (which should be part of the imported go module). The current
 implementation uses `w.client` which is the gRPC client:
 
 
@@ -443,7 +443,7 @@ func (w *Client) GetVolumeStats(
 ```
 
 
-The new implementation should use the server code instead, in the server code `volumeserver` is the implementation agnostic server that's instantiated by every versioned client `volumeservervX` e.g.
+The new implementation should use the server code instead. In the server code, `volumeserver` is the implementation agnostic server that's instantiated by every versioned client `volumeservervX`. E.g.,
 
 
 ```go
@@ -471,7 +471,7 @@ func (w *Client) GetVolumeStats(
 Pros:
 
 * We get to reuse the protobuf code.
-* We would still support the client/server model as this is a new method that clients would use.
+* We would still support the client/server model, as this is a new method that clients would use.
 * We only need to change the client import paths to use the alternative version that doesn't connect to the server with
   gRPC, which minimizes the changes necessary in the client code.
 
@@ -525,9 +525,9 @@ csiProxyV1.PathExists(path)
 ```
 
 
-Internally the PathExists call is in the file [\<API Group\>/\<version\>/client_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/client/groups/volume/v1/client_generated.go)
-described above which performs the execution through gRPC, in the proposal we'd need to use the server implementation
-instead
+Internally the `PathExists` call is in the file [\<API Group\>/\<version\>/client_generated.go](https://github.com/kubernetes-csi/csi-proxy/blob/c0c6293490fd8aec269685bb4089be56d69921b1/client/groups/volume/v1/client_generated.go)
+described above, which performs the execution through gRPC. In the proposal we'd need to use the server implementation
+instead:
 
 ```go
 // note that there is no version in the import
@@ -572,7 +572,7 @@ csiProxy.PathExists(path)
 Pros:
 
 * We remove the concept of API Version & the conversion layer and instead consider the go mod version as the API
-  version. This is how other libraries like k8s.io/mount-utils work.
+  version. This is how other libraries like [k8s.io/mount-utils](https://github.com/kubernetes/mount-utils) work.
     * Version dependent server validation in the API handler layer is removed.
     * Legacy structs for older API versions are removed.
 * New APIs are easier to add. Only the server handler & impl code is modified, so there’s no need for the code
@@ -588,8 +588,11 @@ Cons:
   structs).
 
 It is worth noting that at this point, the notion of a server is no longer valid, as CSI Proxy has become a
-library. We can take this opportunity to reorganize the packages by (a) moving /pkg/server/\<API Group\> and
-/pkg/server/\<API Group\>/impl to /pkg/\<API Group\> (b) moving /pkg/os/\<API Group\> to /pkg/\<API Group\>/api.
+library. We can take this opportunity to reorganize the packages by
+
+1. Moving `/pkg/server/<API Group>` and `/pkg/server/<API Group>/impl` to `/pkg/<API Group>`
+2. Moving `/pkg/os/<API Group>` to `/pkg/<API Group>/api`
+
 The new structure looks like:
 
 
@@ -611,20 +614,20 @@ pkg
 
 There are also three minor details we can take care of while we’re migrating:
 
-1. The two structs under pkg/shared/disk/types.go are only ever referenced by pkg/os/disk, so they can be safely added
-   to pkg/disk/api/types.go.
-2. The FS server receives workingDirs as an input, in addition to the OS API. It’s only used to sandbox what directories
+1. The two structs under `pkg/shared/disk/types.go` are only ever referenced by `pkg/os/disk`, so they can be safely added
+   to `pkg/disk/api/types.go`.
+2. The FS server receives `workingDirs` as an input, in addition to the OS API. It’s only used to sandbox what directories
    the CSI Proxy is enabled to operate on. Now that control is part of the CSI Driver, we can safely remove it.
-3. pkg/os/filesystem is no longer necessary, as the implementation just calls out to the Golang standard library os
-   package. We can deprecate it in release notes and remove in a future release.
+3. `pkg/os/filesystem` is no longer necessary, as the implementation just calls out to the Golang standard library os
+   package. We can deprecate it in release notes and remove it in a future release.
 
 ### Implementation idea 3: Convert CSI Proxy to a Library of Functions
 
 With the new changes, CSI Proxy is effectively just a library of Go functions mapping to Windows commands. The notion of
 servers and clients is no longer relevant, so it makes sense to restructure the package into a library of functions,
-with each API Group’s interfacing functions and types provided under pkg/\<API Group\> (right now, these files sit at
-pkg/server/\<API Group\>/server.go and pkg/server/\<API Group\>/impl/types.go). The OS-facing API at /pkg/os is kept
-is, and the corresponding OS API struct is initialized globally inside each pkg/\<API Group\> (to allow for subbing
+with each API Group’s interfacing functions and types provided under `pkg/<API Group>` (right now, these files sit at
+`pkg/server/<API Group>/server.go` and `pkg/server/<API Group>/impl/types.go`). The OS-facing API at `/pkg/os` is kept
+is, and the corresponding OS API struct is initialized globally inside each `pkg/<API Group>` (to allow for subbing
 during testing). All other code can be safely deleted.
 
 ```go
@@ -694,21 +697,21 @@ Cons:
 
 ### Maintenance of the new model and existing client/server model of CSI Proxy
 
-The `library-development` branch will be used for the development of this model, `master` will have the existing
-client/server mode. We plan to create alpha tags on the `library-development` branch and use it in CSI Drivers,
-next once it's integrated we will create a v2 tag, make `library-deveopment` the new default (`master` will point
-to the new implementation, `v1.x` will point to the existing one).
+The `library-development` branch will be used for the development of this model. `master` will have the existing
+client/server mode. We plan to create alpha tags on the `library-development` branch and use it in CSI Drivers.
+Once integrated, we will create a v2 tag and make `library-deveopment` the new default. `master` will point
+to the new implementation, whereas the legacy code is maintained on the`v1.x`.
 
-`v1.x` will still be open for urgent bug fixes but new features should go into the new model.
+`v1.x` will still be open for urgent bug fixes but new features should be developed in the v2 codebase.
 
 ### Security analysis
 
-We suggest enabling HostProcess containers only for system workloads, one of the drawbacks of this new mode is the
-lack of filesystem isolation which means that HostProcess containers have entire visibility of the host fileystem,
-to prevent workloads from accessing specific paths in the host we recommend:
+We suggest enabling HostProcess containers only for system workloads. One of the drawbacks of this new mode is the
+lack of filesystem isolation, which means that HostProcess containers have entire visibility of the host fileystem.
+To prevent workloads from accessing specific paths in the host we recommend:
 
 - Creating a Windows user with limited permissions to create files under the kubelet controlled path `C:\var\lib\kubelet`
-- Enabling PodSecurityAdmission on the namespace where system components run, note that this needs an additiona
+- Enabling `PodSecurityAdmission` on the namespace where system components run. Note that this needs an additiona
   admission webhook to be installed in the cluster.
 
 ### Test Plan
@@ -734,8 +737,7 @@ This can inform certain test coverage improvements that we want to do before
 extending the production code to implement this enhancement.
 -->
 
-For CSI Proxy we already have unit tests inside `pkg/\<API Group\>`, these tests
-are run on presubmit on every PR.
+For CSI Proxy we already have unit tests inside `pkg/<API Group>`. These tests are run on presubmit for every PR.
 
 Examples:
 
@@ -752,8 +754,7 @@ For Beta and GA, add links to added tests together with links to k8s-triage for 
 https://storage.googleapis.com/k8s-triage/index.html
 -->
 
-For CSI Proxy we already have integration tests inside `integrationtests`, these tests
-are run on presubmit on every PR.
+For CSI Proxy, we already have integration tests inside `integrationtests`. These tests are run on presubmit for every PR.
 
 Examples:
 
@@ -776,8 +777,7 @@ https://storage.googleapis.com/k8s-triage/index.html
 We expect no non-infra related flakes in the last month as a GA graduation criteria.
 -->
 
-OSS storage e2e tests run out of tree, we plan to migrate at least 1 CSI Driver to use the CSI Proxy library
-and see the existing e2e tests passing.
+OSS storage e2e tests run out of tree. We plan to migrate at least 1 CSI Driver to use the CSI Proxy library and see the existing e2e tests passing.
 
 ### Graduation Criteria
 
@@ -809,8 +809,8 @@ functionality is accessed.
 Below are some examples to consider, in addition to the aforementioned [maturity levels][maturity-levels].
 
 -->
-Most of the code used by CSI Drivers through CSI Proxy is already GA, this KEP is defining a new mechanism to run
-the same code that the CSI Driver executes through CSI Proxy directly through the CSI Driver itself.
+Most of the code used by CSI Drivers through CSI Proxy is already GA. This KEP is defining a new mechanism to run
+the same code that the CSI Driver executes through CSI Proxy directly inside the CSI Driver.
 
 
 ### Upgrade / Downgrade Strategy
@@ -826,8 +826,7 @@ enhancement:
 - What changes (in invocations, configurations, API use, etc.) is an existing
   cluster required to make on upgrade, in order to make use of the enhancement?
 -->
-The following is a list of items that need to happen in different components of CSI in Windows for CSI Drivers
-to become HostProcess containers:
+The following is a list of items that need to happen in different components of CSI in Windows for CSI Drivers to become HostProcess containers:
 
 **CSI Proxy**
 
@@ -837,14 +836,13 @@ to become HostProcess containers:
 - Update the unit and integration tests to work with the refactored code.
 - Run the integration tests in a HostProcess container.
 - Update the README and DEVELOPMENT docs.
-- Once the above items are completed we can create an alpha tag in the `library-development` branch to
-  use it in CSI Drivers.
+- Once the above items are completed, we can create an alpha tag in the `library-development` branch to import in CSI Drivers.
 
 **CSI Driver**
 
-- Update the CSI Proxy library to the alpha tag from the `library-development` version.
-- Update the codebase import to use the server impl directly instead of the client library.
-- Update the CSI Driver deployment manifest with the HostProcess container fields in the PodSpec.
+- Update the CSI Proxy library to the alpha v2 tag from the `library-development` branch.
+- Update the codebase import to use the server implementation directly instead of the client library.
+- Update the CSI Driver deployment manifest with the HostProcess container fields in the `PodSpec`.
 - Run the e2e tests.
 
 ### Version Skew Strategy
@@ -861,7 +859,7 @@ enhancement:
 - Will any other components on the node change? For example, changes to CSI,
   CRI or CNI may require updating that component before the kubelet.
 -->
-Previously, CSI Proxy has a different release cycle than the CSI Driver where each binary had its own version and
+Previously, CSI Proxy has a different release cycle than the CSI Driver, where each binary had its own version and
 supported different CSI Proxy clients. Once CSI Proxy becomes a library the version will be managed by the go module
 version instead (similar to kubernetes/mount-utils).
 
